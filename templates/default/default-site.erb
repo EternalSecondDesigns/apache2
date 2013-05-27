@@ -1,57 +1,52 @@
-<VirtualHost *:80>
-        ServerAdmin <%= node['apache']['contact'] %>
+NameVirtualHost *:<%= node[:apache][:server_port] %>
 
-        DocumentRoot /var/www/
-        <Directory />
-                Options FollowSymLinks
-                AllowOverride None
-        </Directory>
-        <Directory /var/www/>
-                Options Indexes FollowSymLinks MultiViews
-                AllowOverride None
-                Order allow,deny
-                allow from all
-                # This directive allows us to have apache2's default start page
-                # in /apache2-default/, but still have / go to the right place
-                #RedirectMatch ^/$ /apache2-default/
-        </Directory>
+<VirtualHost *:<%= node[:apache][:server_port] %> >
+	ServerAdmin <%= node[:apache][:contact] %>
 
-        ScriptAlias /cgi-bin/ /usr/lib/cgi-bin/
-        <Directory "/usr/lib/cgi-bin">
-                AllowOverride None
-                Options ExecCGI -MultiViews +SymLinksIfOwnerMatch
-                Order allow,deny
-                Allow from all
-        </Directory>
+    ErrorLog <%= node[:apache][:log_dir] %>/error.log
 
-        ErrorLog <%= node['apache']['log_dir'] %>/error.log
+    # Possible values include: debug, info, notice, warn, error, crit,
+    # alert, emerg.
+    LogLevel warn
 
-        # Possible values include: debug, info, notice, warn, error, crit,
-        # alert, emerg.
-        LogLevel warn
+    CustomLog <%= node[:apache][:log_dir] %>/access.log combined
+    ServerSignature On
 
-        CustomLog <%= node['apache']['log_dir'] %>/access.log combined
-        ServerSignature On
+	ServerName www.local.dev
+        ServerAlias *.vm.dev *.vm.prd *.local.dev *.local.prd *.sf.dev *.sf.prd
+        ServerAdmin <%= node[:apache][:contact] %>
+        DocumentRoot <%= node[:apache][:sites_path] %>
 
-        Alias /doc/ "/usr/share/doc/"
-        <Directory "/usr/share/doc/">
-            Options Indexes MultiViews FollowSymLinks
-            AllowOverride None
-            Order deny,allow
-            Deny from all
-            Allow from 127.0.0.0/255.0.0.0 ::1/128
-        </Directory>
+	<Directory />
+		Options FollowSymLinks
+		AllowOverride None
+	</Directory>
 
-        <% if %w{ rhel fedora }.include?(node['platform_family']) -%>
-        #
-        # This configuration file enables the default "Welcome"
-        # page if there is no default index page present for
-        # the root URL.  To disable the Welcome page, comment
-        # out all the lines below.
-        #
-        <LocationMatch "^/+$">
-            Options -Indexes
-            ErrorDocument 403 /error/noindex.html
-        </LocationMatch>
-        <% end -%>
+	<Directory <%= node[:apache][:sites_path] %>>
+		Options Indexes FollowSymLinks MultiViews
+		AllowOverride All
+		Order allow,deny
+		allow from all
+	</Directory>
+
+	DirectoryIndex index.html index.php app.php index.shtml
+
+	RewriteEngine on
+
+	RewriteMap lowercase int:tolower
+
+	# *.*.(local|vm).(dev|prd) -- e.g. abc.def.local.dev -> .../def_dev/public_html_abc/...
+	RewriteCond ${lowercase:%{SERVER_NAME}} ^[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+\.(local|vm)\.(dev|prd)$
+	RewriteRule ^(.+) ${lowercase:%{SERVER_NAME}}$1 [C]
+	RewriteRule ^([a-zA-Z0-9-]+)\.([a-zA-Z0-9-]+)\.(local|vm)\.(dev|prd)/(.*) <%= node[:apache][:sites_path] %>/$2_$4/public_html_$1/$5
+
+	# *.(local|vm).(dev|prd)
+	RewriteCond ${lowercase:%{SERVER_NAME}} ^[a-zA-Z0-9-]+\.(local|vm)\.(dev|prd)$
+	RewriteRule ^(.+) ${lowercase:%{SERVER_NAME}}$1 [C]
+	RewriteRule ^([a-zA-Z0-9-]+)\.(local|vm)\.(dev|prd)/(.*) <%= node[:apache][:sites_path] %>/$1_$3/public_html/$4
+
+	# *.sf.(dev|prd)
+	RewriteCond ${lowercase:%{SERVER_NAME}} ^[a-zA-Z0-9-]+\.sf\.(dev|prd)$
+	RewriteRule ^(.+) ${lowercase:%{SERVER_NAME}}$1 [C]
+	RewriteRule ^([a-zA-Z0-9-]+)\.sf\.(dev|prd)/(.*) <%= node[:apache][:sites_path] %>/$1_$2/web/$3 [L]
 </VirtualHost>
